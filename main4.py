@@ -21,6 +21,144 @@ from keras.layers import Input, Concatenate, Conv2D, Flatten, Dense, Embedding, 
 from keras.models import Model
 from keras import layers
 
+import tqdm
+import re
+import string
+
+df = pd.read_parquet('./dataset/train-00000-of-00009.parquet', engine='pyarrow')[["code1", "code2", "similar"]]
+# CUT Dataframe
+df = df.iloc[:100,:]
+print("RAW Dataframe:")
+print(df)
+
+# Create word embeddings
+# Source: https://jaketae.github.io/study/word2vec/
+
+# Store all tokens
+code_fragments = []
+
+# Tokenizes code
+def apply_tokenization(code):
+    tokens = tokenize.tokenize(BytesIO(code.encode('utf-8')).readline)
+    result = []
+
+    for token in tokens:
+        str_token = token.string
+        result.append(str_token)
+    code_fragments.append(result)
+    return ' '.join(map(str, result))
+
+# Maps every token to ID
+def apply_mapping(tokens):
+    token_to_id = {}
+    id_to_token = {}
+
+    for i, token in enumerate(set(tokens)):
+        token_to_id[token] = i
+        id_to_token[i] = token
+
+    return token_to_id, id_to_token
+
+def flatten_list(list_of_lists):
+    result = []
+    for list in list_of_lists:
+        result = result + list
+    return result
+
+flat_code_fragments = flatten_list(code_fragments)
+
+# Apply tokenization to dataframe
+df['code1'] = df['code1'].apply(apply_tokenization)
+df['code2'] = df['code2'].apply(apply_tokenization)
+
+print("Full tokens")
+print(flat_code_fragments)
+
+print("Mapping")
+# Map tokens into IDs
+token_to_id, id_to_token = apply_mapping(flat_code_fragments)
+print(token_to_id)
+
+#####################################################################################################################
+
+import io
+import os
+import re
+import shutil
+import string
+import tensorflow as tf
+
+from keras import Sequential
+from keras.layers import Dense, Embedding, GlobalAveragePooling1D
+from keras.layers import TextVectorization
+
+batch_size = 1024
+seed = 123
+train_ds = tf.data.Dataset.from_tensor_slices(flat_code_fragments)
+
+AUTOTUNE = tf.data.AUTOTUNE
+train_ds = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
+
+# Embed a 1,000 word vocabulary into 5 dimensions.
+embedding_layer = tf.keras.layers.Embedding(1000, 5)
+result = embedding_layer(tf.constant([1, 2, 3]))
+result.numpy()
+result = embedding_layer(tf.constant([[0, 1, 2], [3, 4, 5]]))
+result.shape
+
+# Create a custom standardization function to strip HTML break tags '<br />'.
+def custom_standardization(input_data):
+  lowercase = tf.strings.lower(input_data)
+  stripped_html = tf.strings.regex_replace(lowercase, '<br />', ' ')
+  return tf.strings.regex_replace(stripped_html,
+                                  '[%s]' % re.escape(string.punctuation), '')
+
+
+# Vocabulary size and number of words in a sequence.
+vocab_size = 10000
+sequence_length = 100
+
+# Use the text vectorization layer to normalize, split, and map strings to
+# integers. Note that the layer uses the custom standardization defined above.
+# Set maximum_sequence length as all samples are not of the same length.
+vectorize_layer = TextVectorization(
+    standardize=custom_standardization,
+    max_tokens=vocab_size,
+    output_mode='int',
+    output_sequence_length=sequence_length)
+
+# Make a text-only dataset (no labels) and call adapt to build the vocabulary.
+text_ds = train_ds.map(lambda x, y: x)
+vectorize_layer.adapt(text_ds)
+
+embedding_dim=16
+
+model = Sequential([
+  vectorize_layer,
+  Embedding(vocab_size, embedding_dim, name="embedding"),
+  GlobalAveragePooling1D(),
+  Dense(16, activation='relu'),
+  Dense(1)
+])
+
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="logs")
+
+model.compile(optimizer='adam',
+              loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
+              metrics=['accuracy'])
+
+model.fit(
+    train_ds,
+    validation_data=train_ds,
+    epochs=15,
+    callbacks=[tensorboard_callback])
+
+model.summary()
+
+
+#####################################################################################################################
+
+
 # original source: https://github.com/prabhnoor0212/Siamese-Network-Text-Similarity/blob/master/quora_siamese.ipynb
 
 # Create train, validation an test dataframes
@@ -75,7 +213,8 @@ not_present_list = []
 vocab_size = len(t.word_index) + 1
 print('Loaded %s word vectors.' % len(embeddings_index))
 embedding_matrix = np.zeros((vocab_size, len(embeddings_index['no'])))
-
+print('sdfdshjfdshfjdshjfhdskfhkjdshf')
+print(len(embeddings_index['no']))
 for word, i in t.word_index.items():
     if word in embeddings_index.keys():
         embedding_vector = embeddings_index.get(word)
@@ -119,8 +258,10 @@ def auroc(y_true, y_pred):
 input_1 = Input(shape=(train_q1_seq.shape[1],))
 input_2 = Input(shape=(train_q2_seq.shape[1],))
 
+len(t.word_index)
+
 common_embed = Embedding(name="synopsis_embedd",input_dim =len(t.word_index)+1,
-                       output_dim=len(embeddings_index['no']),weights=[embedding_matrix],
+                       output_dim=10,weights=[model["w2"]],
                        input_length=train_q1_seq.shape[1],trainable=False)
 lstm_1 = common_embed(input_1)
 lstm_2 = common_embed(input_2)

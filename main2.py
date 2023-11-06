@@ -21,6 +21,98 @@ from keras.layers import Input, Concatenate, Conv2D, Flatten, Dense, Embedding, 
 from keras.models import Model
 from keras import layers
 
+from time import time
+import multiprocessing
+from gensim.models import Word2Vec
+
+# Read dataset and create a dataframe
+df = pd.read_parquet('./dataset/train-00000-of-00009.parquet', engine='pyarrow')[["code1", "code2", "similar"]]
+
+# Cut dataframe
+df = df.iloc[:100,:]
+print("RAW Dataframe:")
+print(df)
+
+##############################################################################################################################
+
+# Create word embeddings
+
+# Store all code fragments
+code_fragments = []
+
+# Tokenizes code
+def apply_tokenization(code):
+    tokens = tokenize.tokenize(BytesIO(code.encode('utf-8')).readline)
+    result = []
+
+    for token in tokens:
+        str_token = token.string
+        result.append(str_token)
+    code_fragments.append(result)
+    return ' '.join(map(str, result))
+
+# Apply tokenization to dataframe
+df['code1'] = df['code1'].apply(apply_tokenization)
+df['code2'] = df['code2'].apply(apply_tokenization)
+
+cores = multiprocessing.cpu_count()
+
+# Define Word2Vec model using fragments of code from dataframe
+w2v_model = Word2Vec(min_count=20,
+                     window=2,
+                     vector_size=50,
+                     sample=6e-5,
+                     alpha=0.03,
+                     min_alpha=0.0007,
+                     negative=20,
+                     workers=cores-1)
+
+# Build vocabulary
+t = time()
+
+w2v_model.build_vocab(code_fragments, progress_per=10000)
+
+print('Time to build vocab: {} mins'.format(round((time() - t) / 60, 2)))
+
+# Train model
+t = time()
+
+w2v_model.train(code_fragments, total_examples=w2v_model.corpus_count, epochs=30, report_delay=1)
+
+print('Time to train the model: {} mins'.format(round((time() - t) / 60, 2)))
+
+w2v_model.init_sims(replace=True)
+
+# Explore model
+result = w2v_model.wv.most_similar(positive=["def"])
+print(result)
+
+weights = w2v_model.wv.vectors
+print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+print(w2v_model.wv.key_to_index)
+
+##############################################################################################################################
+
+# Create model
+import keras.backend as K
+from keras.preprocessing.text import Tokenizer
+from keras.preprocessing.sequence import pad_sequences
+from sklearn.model_selection import train_test_split
+
+from keras.regularizers import l2
+from keras.models import Sequential
+from keras.optimizers import Adam
+from keras.layers import Conv2D, ZeroPadding2D, Activation, Input, concatenate
+from keras.models import Model
+from keras.layers import Input, Concatenate, Conv2D, Flatten, Dense, Embedding, LSTM
+from keras.models import Model
+from keras.layers import BatchNormalization
+from keras.layers import MaxPooling2D
+from keras.layers import Concatenate
+from keras.layers import Lambda, Flatten, Dense
+from keras.initializers import glorot_uniform
+from keras.layers import Input, Dense, Flatten, GlobalMaxPool2D, GlobalAvgPool2D, Concatenate, Multiply, Dropout, Subtract, Add, Conv2D
+
 # original source: https://github.com/prabhnoor0212/Siamese-Network-Text-Similarity/blob/master/quora_siamese.ipynb
 
 # Create train, validation an test dataframes
@@ -61,20 +153,15 @@ test_q2_seq = pad_sequences(test_q2_seq, maxlen=max_len, padding='post')
 #https://nlp.stanford.edu/projects/glove/
 embeddings_index = {}
 # Maps words and its vectors on a dictionary
-f = open('./embeddings/glove.6B/glove.6B.50d.txt')
-for line in f:
-    values = line.split()
-    word = values[0]
-    coefs = np.asarray(values[1:], dtype='float32')
-    embeddings_index[word] = coefs
-f.close()
+for idx, key in enumerate(w2v_model.wv.key_to_index):
+    embeddings_index[key] = w2v_model.wv[key]
 
 print('Found %s word vectors.' % len(embeddings_index))
 
 not_present_list = []
 vocab_size = len(t.word_index) + 1
 print('Loaded %s word vectors.' % len(embeddings_index))
-embedding_matrix = np.zeros((vocab_size, len(embeddings_index['no'])))
+embedding_matrix = np.zeros((vocab_size, len(embeddings_index['def'])))
 
 for word, i in t.word_index.items():
     if word in embeddings_index.keys():
@@ -85,21 +172,6 @@ for word, i in t.word_index.items():
         embedding_matrix[i] = embedding_vector
     else:
         embedding_matrix[i] = np.zeros(300)
-##############################################################################################################################
-
-# Create model
-from keras.regularizers import l2
-from keras.models import Sequential
-from keras.optimizers import Adam
-from keras.layers import Conv2D, ZeroPadding2D, Activation, Input, concatenate
-from keras.models import Model
-
-from keras.layers import BatchNormalization
-from keras.layers import MaxPooling2D
-from keras.layers import Concatenate
-from keras.layers import Lambda, Flatten, Dense
-from keras.initializers import glorot_uniform
-from keras.layers import Input, Dense, Flatten, GlobalMaxPool2D, GlobalAvgPool2D, Concatenate, Multiply, Dropout, Subtract, Add, Conv2D
 
 def cosine_distance(vests):
     x, y = vests
@@ -120,8 +192,9 @@ input_1 = Input(shape=(train_q1_seq.shape[1],))
 input_2 = Input(shape=(train_q2_seq.shape[1],))
 
 common_embed = Embedding(name="synopsis_embedd",input_dim =len(t.word_index)+1,
-                       output_dim=len(embeddings_index['no']),weights=[embedding_matrix],
+                       output_dim=len(embeddings_index['def']),weights=[embedding_matrix],
                        input_length=train_q1_seq.shape[1],trainable=False)
+
 lstm_1 = common_embed(input_1)
 lstm_2 = common_embed(input_2)
 
