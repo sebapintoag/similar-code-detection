@@ -1,27 +1,20 @@
-# Import dependencies
-import tokenize
-from io import BytesIO
-import pandas as pd
-
-import numpy as np
-import tensorflow as tf
-from tensorflow import keras
-import transformers
-import keras
-import keras.backend as K
-import joblib
-import sklearn
-
-from sklearn.model_selection import train_test_split
+import dataframe
+import embedding
+import ann
 
 from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
+from sklearn.model_selection import train_test_split
 
-from keras.layers import Input, Concatenate, Conv2D, Flatten, Dense, Embedding, LSTM
-from keras.models import Model
-from keras import layers
+# Read dataset
+df = dataframe.from_parquet('./dataset/train-00000-of-00009.parquet', ["code1", "code2", "similar"])
+df = dataframe.cut(df, 100)
 
-# original source: https://github.com/prabhnoor0212/Siamese-Network-Text-Similarity/blob/master/quora_siamese.ipynb
+# TODO: Apply preprocessing to code
+# TODO: Apply subsambling to code
+
+# Prepare training and validation sets
+# Source: https://github.com/prabhnoor0212/Siamese-Network-Text-Similarity/blob/master/quora_siamese.ipynb
 
 # Create train, validation an test dataframes
 X_temp, X_test, y_temp, y_test = train_test_split(df[['code1', 'code2']], df['similar'], test_size=0.2, random_state=42)
@@ -57,101 +50,17 @@ val_q2_seq = pad_sequences(val_q2_seq, maxlen=max_len, padding='post')
 test_q1_seq = pad_sequences(test_q1_seq, maxlen=max_len, padding='post')
 test_q2_seq = pad_sequences(test_q2_seq, maxlen=max_len, padding='post')
 
-#https://blog.keras.io/using-pre-trained-word-embeddings-in-a-keras-model.html
-#https://nlp.stanford.edu/projects/glove/
-embeddings_index = {}
-# Maps words and its vectors on a dictionary
-f = open('./embeddings/glove.6B/glove.6B.50d.txt')
-for line in f:
-    values = line.split()
-    word = values[0]
-    coefs = np.asarray(values[1:], dtype='float32')
-    embeddings_index[word] = coefs
-f.close()
+# Get embedding matrix
+embedded = embedding.Embedding(df, t, "keras")
+embedded.prepare_dataframe()
+embedded.build_model()
 
-print('Found %s word vectors.' % len(embeddings_index))
-
-not_present_list = []
-vocab_size = len(t.word_index) + 1
-print('Loaded %s word vectors.' % len(embeddings_index))
-embedding_matrix = np.zeros((vocab_size, len(embeddings_index['no'])))
-
-for word, i in t.word_index.items():
-    if word in embeddings_index.keys():
-        embedding_vector = embeddings_index.get(word)
-    else:
-        not_present_list.append(word)
-    if embedding_vector is not None:
-        embedding_matrix[i] = embedding_vector
-    else:
-        embedding_matrix[i] = np.zeros(300)
-##############################################################################################################################
+print(embedded.get_matrix())
 
 # Create model
-from keras.regularizers import l2
-from keras.models import Sequential
-from keras.optimizers import Adam
-from keras.layers import Conv2D, ZeroPadding2D, Activation, Input, concatenate
-from keras.models import Model
+neuralnet = ann.SiameseNeuralNetwork([train_q1_seq, train_q2_seq], [val_q1_seq, val_q2_seq], y_train, y_val, embedded)
 
-from keras.layers import BatchNormalization
-from keras.layers import MaxPooling2D
-from keras.layers import Concatenate
-from keras.layers import Lambda, Flatten, Dense
-from keras.initializers import glorot_uniform
-from keras.layers import Input, Dense, Flatten, GlobalMaxPool2D, GlobalAvgPool2D, Concatenate, Multiply, Dropout, Subtract, Add, Conv2D
-
-def cosine_distance(vests):
-    x, y = vests
-    x = K.l2_normalize(x, axis=-1)
-    y = K.l2_normalize(y, axis=-1)
-    return -K.mean(x * y, axis=-1, keepdims=True)
-
-def cos_dist_output_shape(shapes):
-    shape1, shape2 = shapes
-    return (shape1[0],1)
-
-from sklearn.metrics import roc_auc_score
-
-def auroc(y_true, y_pred):
-    return tf.numpy_function(roc_auc_score, (y_true, y_pred), tf.double)
-
-input_1 = Input(shape=(train_q1_seq.shape[1],))
-input_2 = Input(shape=(train_q2_seq.shape[1],))
-
-common_embed = Embedding(name="synopsis_embedd",input_dim =len(t.word_index)+1,
-                       output_dim=len(embeddings_index['no']),weights=[embedding_matrix],
-                       input_length=train_q1_seq.shape[1],trainable=False)
-lstm_1 = common_embed(input_1)
-lstm_2 = common_embed(input_2)
-
-common_lstm = LSTM(64,return_sequences=True, activation="relu")
-vector_1 = common_lstm(lstm_1)
-vector_1 = Flatten()(vector_1)
-
-vector_2 = common_lstm(lstm_2)
-vector_2 = Flatten()(vector_2)
-
-x3 = Subtract()([vector_1, vector_2])
-x3 = Multiply()([x3, x3])
-
-x1_ = Multiply()([vector_1, vector_1])
-x2_ = Multiply()([vector_2, vector_2])
-x4 = Subtract()([x1_, x2_])
-
-#https://stackoverflow.com/a/51003359/10650182
-x5 = Lambda(cosine_distance, output_shape=cos_dist_output_shape)([vector_1, vector_2])
-
-conc = Concatenate(axis=-1)([x5,x4, x3])
-
-x = Dense(100, activation="relu", name='conc_layer')(conc)
-x = Dropout(0.01)(x)
-out = Dense(1, activation="sigmoid", name = 'out')(x)
-
-model = Model([input_1, input_2], out)
-
-model.compile(loss="binary_crossentropy", metrics=['acc',auroc], optimizer=Adam(0.00001))
-
-model.summary()
-
-model.fit([train_q1_seq,train_q2_seq],y_train.values.reshape(-1,1), epochs = 5, batch_size=64,validation_data=([val_q1_seq, val_q2_seq],y_val.values.reshape(-1,1)))
+neuralnet.build()
+neuralnet.compile()
+neuralnet.summary()
+neuralnet.fit()

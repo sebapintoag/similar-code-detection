@@ -29,6 +29,7 @@ class SiameseNeuralNetwork:
         self.embedded = embedded
 
     def build(self):
+        # Source: https://github.com/prabhnoor0212/Siamese-Network-Text-Similarity/blob/master/quora_siamese.ipynb
         input_1 = Input(shape=(self.x_train[0].shape[1],))
         input_2 = Input(shape=(self.x_train[1].shape[1],))
 

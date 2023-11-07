@@ -5,6 +5,11 @@ from time import time
 import multiprocessing
 from gensim.models import Word2Vec
 
+from tensorflow import keras
+from keras import layers
+from keras.preprocessing.text import one_hot
+from keras.preprocessing.sequence import pad_sequences
+
 class Embedding:
     def __init__(self, dataframe, tkn, method = 'word2vec'):
         self.df = dataframe
@@ -51,7 +56,7 @@ class Embedding:
     def get_vocab(self):
         if self.method == "word2vec":
             return self.model.key_to_index
-        elif self.method == "raw":
+        elif self.method == "raw" or self.method == "keras":
             return self.token_to_id
 
     def get_embedding(self, word):
@@ -64,12 +69,17 @@ class Embedding:
                 print("`word` not in corpus")
             one_hot = one_hot_encode(idx, len(self.token_to_id))
             return forward(self.model, one_hot)["a1"]
+        elif self.method == "keras":
+            idx = self.token_to_id[word]
+            return self.model.layers[0].weights[0][idx]
 
     def build_model(self):
         if self.method == "word2vec":
             self.model, self.weights = get_weights_using_word2vec(self.code_fragments)
         elif self.method == "raw":
             self.model, self.weights = get_weights_using_raw_networks(self.token_to_id, 30)
+        elif self.method == "keras":
+            self.model, self.weights = get_weights_using_keras(self.token_to_id, self.code_fragments)
         
         for _, key in enumerate(self.get_vocab()):
             self.embeddings_index[key] = self.get_embedding(key)
@@ -137,6 +147,7 @@ def forward(model, x, return_cache=True):
     return cache
         
 def get_weights_using_word2vec(code_fragments):
+    # Source: https://www.kaggle.com/code/pierremegret/gensim-word2vec-tutorial
     cores = multiprocessing.cpu_count()
 
     # Define Word2Vec model using fragments of code from dataframe
@@ -162,6 +173,7 @@ def get_weights_using_word2vec(code_fragments):
     return w2v_model.wv, w2v_model.wv.vectors
 
 def get_weights_using_raw_networks(token_to_id, n_embedding):
+    # Source: https://jaketae.github.io/study/word2vec/
     vocab_size = len(token_to_id)
     model = {
         "w1": np.random.randn(vocab_size, n_embedding),
@@ -171,3 +183,39 @@ def get_weights_using_raw_networks(token_to_id, n_embedding):
     learning = one_hot_encode(token_to_id["def"], len(token_to_id))
     forward(model, [learning], return_cache=False)[0]
     return model, model["w2"]
+
+def get_weights_using_keras(token_to_id, code_fragments):
+    # Source: https://www.jasonosajima.com/word2vec.html
+    # Source: https://medium.com/analytics-vidhya/understanding-embedding-layer-in-keras-bbe3ff1327ce
+    EMBEDDING_DIM = 30
+    N_WORDS = len(token_to_id.keys())
+    
+    train_set = []
+    for fragment in code_fragments:
+        for i in range(1, len(fragment)-1):
+            target_word = token_to_id[fragment[i]]
+            context = [token_to_id[fragment[i-1]], token_to_id[fragment[i+1]]]
+            train_set.append((target_word, context))
+
+    embedding_layer = layers.Embedding(N_WORDS, EMBEDDING_DIM, 
+                                       embeddings_initializer="RandomNormal",
+                                       input_shape=(1,))
+    
+    X = np.array([example[0] for example in train_set])
+    y = np.array([example[1] for example in train_set])
+    y = keras.utils.to_categorical(y, num_classes=N_WORDS)
+    y = np.sum(y, axis=1).astype('int')
+
+    model = keras.Sequential([
+        embedding_layer,
+        layers.GlobalAveragePooling1D(),
+        layers.Dense(N_WORDS, activation='softmax'),
+        ])
+    model.compile(optimizer='adam',
+                  loss='binary_crossentropy',
+                  metrics=['accuracy'])
+
+    model.fit(X,y, batch_size=X.shape[0])
+    print(model.layers[0].weights[0])
+    print(embedding_layer.get_weights()[0])
+    return model, embedding_layer.get_weights()[0]
