@@ -51,14 +51,25 @@ class Embedding:
     def get_vocab(self):
         if self.method == "word2vec":
             return self.model.key_to_index
+        elif self.method == "raw":
+            return self.token_to_id
 
     def get_embedding(self, word):
         if self.method == "word2vec":
             return self.model[word]
+        elif self.method == "raw":
+            try:
+                idx = self.token_to_id[word]
+            except KeyError:
+                print("`word` not in corpus")
+            one_hot = one_hot_encode(idx, len(self.token_to_id))
+            return forward(self.model, one_hot)["a1"]
 
     def build_model(self):
         if self.method == "word2vec":
             self.model, self.weights = get_weights_using_word2vec(self.code_fragments)
+        elif self.method == "raw":
+            self.model, self.weights = get_weights_using_raw_networks(self.token_to_id, 30)
         
         for _, key in enumerate(self.get_vocab()):
             self.embeddings_index[key] = self.get_embedding(key)
@@ -94,6 +105,36 @@ def flatten_list(list_of_lists):
     for list in list_of_lists:
         result = result + list
     return result
+
+# Generates a one-hot encodding for a single token
+def one_hot_encode(id, token_size):
+    result = [0] * token_size
+    result[id] = 1
+    return result
+
+# Concatenates 2 range objects
+def concatenate(*iterables):
+    for iterable in iterables:
+        yield from iterable
+
+def softmax(x):
+    result = []
+    for i in x:
+        exp = np.exp(i)
+        result.append(exp / exp.sum())
+    return result
+
+# Forward propagation
+def forward(model, x, return_cache=True):
+    cache = {}
+
+    cache["a1"] = x @ model["w1"]
+    cache["a2"] = cache["a1"] @ model["w2"]
+    cache["z"] = softmax(cache["a2"])
+
+    if not return_cache:
+        return cache["z"]
+    return cache
         
 def get_weights_using_word2vec(code_fragments):
     cores = multiprocessing.cpu_count()
@@ -120,5 +161,13 @@ def get_weights_using_word2vec(code_fragments):
     # Return model and weights
     return w2v_model.wv, w2v_model.wv.vectors
 
-def get_weights_using_raw_networks():
-    return
+def get_weights_using_raw_networks(token_to_id, n_embedding):
+    vocab_size = len(token_to_id)
+    model = {
+        "w1": np.random.randn(vocab_size, n_embedding),
+        "w2": np.random.randn(n_embedding, vocab_size)
+    }
+
+    learning = one_hot_encode(token_to_id["def"], len(token_to_id))
+    forward(model, [learning], return_cache=False)[0]
+    return model, model["w2"]

@@ -205,6 +205,7 @@ result = forward(model, [learning], return_cache=False)[0]
 
 for word in (id_to_token[id] for id in np.argsort(result)[::-1]):
     print(word)
+
 # Get embedded
 def get_embedding(model, word):
     try:

@@ -48,7 +48,7 @@ test_q1_seq = pad_sequences(test_q1_seq, maxlen=max_len, padding='post')
 test_q2_seq = pad_sequences(test_q2_seq, maxlen=max_len, padding='post')
 
 # Get embedding matrix
-embedded = embedding.Embedding(df, t, "word2vec")
+embedded = embedding.Embedding(df, t, "raw")
 embedded.prepare_dataframe()
 embedded.build_model()
 
