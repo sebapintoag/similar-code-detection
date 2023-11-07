@@ -173,6 +173,8 @@ for word, i in t.word_index.items():
     else:
         embedding_matrix[i] = np.zeros(300)
 
+#######################################################################################################################
+
 def cosine_distance(vests):
     x, y = vests
     x = K.l2_normalize(x, axis=-1)

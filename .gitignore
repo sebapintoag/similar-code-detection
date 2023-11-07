@@ -5,3 +5,4 @@ include/
 embeddings/
 dataset/
 pyvenv.cfg
+__pycache__
