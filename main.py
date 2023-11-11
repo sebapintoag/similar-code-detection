@@ -10,7 +10,7 @@ from sklearn.model_selection import train_test_split
 df = dataframe.from_parquet(
     "./dataset/train-00000-of-00009.parquet", ["code1", "code2", "similar"]
 )
-df = dataframe.cut(df, 100)
+df = dataframe.cut(df, 2000)
 
 # TODO: Apply preprocessing to code
 # TODO: Apply subsambling to code

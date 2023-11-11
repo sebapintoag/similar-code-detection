@@ -2,7 +2,7 @@
 lib/
 bin/
 include/
-embeddings/
-dataset/
 pyvenv.cfg
 __pycache__
+embeddings/
+dataset/

@@ -1,0 +1,3 @@
+cd ~/.virtualenvs/<your venv name here>/bin
+mkdir bk; cp python bk; mv -f bk/python .;rmdir bk
+codesign -s - --preserve-metadata=identifier,entitlements,flags,runtime -f python
