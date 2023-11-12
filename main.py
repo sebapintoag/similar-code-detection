@@ -10,7 +10,7 @@ from sklearn.model_selection import train_test_split
 df = dataframe.from_parquet(
     "./dataset/train-00000-of-00009.parquet", ["code1", "code2", "similar"]
 )
-df = dataframe.cut(df, 2000)
+df = dataframe.cut(df, 100000)
 
 # TODO: Apply preprocessing to code
 # TODO: Apply subsambling to code
@@ -58,8 +58,9 @@ val_q2_seq = pad_sequences(val_q2_seq, maxlen=max_len, padding="post")
 test_q1_seq = pad_sequences(test_q1_seq, maxlen=max_len, padding="post")
 test_q2_seq = pad_sequences(test_q2_seq, maxlen=max_len, padding="post")
 
+print(df)
 # Get embedding matrix
-embedded = embedding.Embedding(df, t, "keras")
+embedded = embedding.Embedding(df, t, "raw")
 embedded.prepare_dataframe()
 embedded.build_model()
 

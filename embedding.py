@@ -232,7 +232,8 @@ def get_weights_using_keras(token_to_id, code_fragments):
     )
     model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
 
-    model.fit(X, y, batch_size=X.shape[0])
+    #model.fit(X, y, batch_size=X.shape[0])
+    model.fit(X, y, batch_size=500)
     print(model.layers[0].weights[0])
     print(embedding_layer.get_weights()[0])
     return model, embedding_layer.get_weights()[0]
