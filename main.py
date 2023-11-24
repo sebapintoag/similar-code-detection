@@ -1,6 +1,7 @@
 import dataframe
 import embedding
 import ann
+import metrics
 
 from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
@@ -10,7 +11,7 @@ from sklearn.model_selection import train_test_split
 df = dataframe.from_parquet(
     "./dataset/train-00000-of-00009.parquet", ["code1", "code2", "similar"]
 )
-df = dataframe.cut(df, 100000)
+df = dataframe.cut(df, 1000)
 
 # TODO: Apply preprocessing to code
 # TODO: Apply subsambling to code
@@ -60,11 +61,9 @@ test_q2_seq = pad_sequences(test_q2_seq, maxlen=max_len, padding="post")
 
 print(df)
 # Get embedding matrix
-embedded = embedding.Embedding(df, t, "raw")
+embedded = embedding.Embedding(df, t, "keras")
 embedded.prepare_dataframe()
 embedded.build_model()
-
-print(embedded.get_matrix())
 
 # Create model
 neuralnet = ann.SiameseNeuralNetwork(
@@ -74,7 +73,11 @@ neuralnet = ann.SiameseNeuralNetwork(
 neuralnet.build()
 neuralnet.compile()
 neuralnet.summary()
-neuralnet.fit()
+history = neuralnet.fit()
+
+# Plot
+metrics.plot_history(embedded.history, "Embedding model", False)
+metrics.plot_history(history, "Siamese model")
 
 # Evaluate model
 loss, accuracy, _ = neuralnet.evaluate()

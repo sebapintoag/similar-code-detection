@@ -16,7 +16,6 @@ from keras.models import Model
 from keras.optimizers import Adam
 from sklearn.metrics import roc_auc_score
 
-
 def cosine_distance(vests):
     x, y = vests
     x = K.l2_normalize(x, axis=-1)
@@ -96,15 +95,15 @@ class SiameseNeuralNetwork:
         self.model.summary()
 
     def fit(self):
-        self.model.fit(
+        return self.model.fit(
             [self.x_train[0], self.x_train[1]],
             self.y_train.values.reshape(-1, 1),
-            epochs=5,
+            epochs=15,
             batch_size=64,
             validation_data=(
                 [self.x_validation[0], self.x_validation[1]],
                 self.y_validation.values.reshape(-1, 1),
-            ),
+            )
         )
 
     def evaluate(self):

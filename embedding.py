@@ -19,6 +19,7 @@ class Embedding:
         self.weights = None
         self.embeddings_index = {}
         self.embedding_matrix = None
+        self.history = None
 
         self.flat_code_fragments = []
         self.token_to_id = {}
@@ -80,7 +81,7 @@ class Embedding:
                 self.token_to_id, 30
             )
         elif self.method == "keras":
-            self.model, self.weights = get_weights_using_keras(
+            self.model, self.weights, self.history = get_weights_using_keras(
                 self.token_to_id, self.code_fragments
             )
 
@@ -233,7 +234,7 @@ def get_weights_using_keras(token_to_id, code_fragments):
     model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
 
     #model.fit(X, y, batch_size=X.shape[0])
-    model.fit(X, y, batch_size=500)
+    history = model.fit(X, y, batch_size=100, epochs=5)
     print(model.layers[0].weights[0])
     print(embedding_layer.get_weights()[0])
-    return model, embedding_layer.get_weights()[0]
+    return model, embedding_layer.get_weights()[0], history
