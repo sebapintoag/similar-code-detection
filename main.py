@@ -7,11 +7,16 @@ from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
 from sklearn.model_selection import train_test_split
 
+import time
+
+# START RECORDING TIME OF EXECUTION
+start_time = time.time()
+
 # Read dataset
 df = dataframe.from_parquet(
     "./dataset/train-00000-of-00009.parquet", ["code1", "code2", "similar"]
 )
-df = dataframe.cut(df, 1000)
+df = dataframe.cut(df, 2000)
 
 # TODO: Apply preprocessing to code
 # TODO: Apply subsambling to code
@@ -75,13 +80,17 @@ neuralnet.compile()
 neuralnet.summary()
 history = neuralnet.fit()
 
+# Evaluate model
+loss, accuracy, _ = neuralnet.evaluate()
+print("Loss: %f" % (loss * 100))
+print("Accuracy: %f" % (accuracy * 100))
+
+# GET TIME OF EXECUTION
+time_of_execution = time.time() - start_time
+print("Execution time: %s seconds" % time_of_execution)
+
 # Plot
 metrics.plot_history(embedded.history, "Embedding model", False)
 metrics.plot_history(history, "Siamese model")
 metrics.plot_network(embedded.model, "embedded_model.png")
 metrics.plot_network(neuralnet.model, "snn_model.png")
-
-# Evaluate model
-loss, accuracy, _ = neuralnet.evaluate()
-print("Loss: %f" % (loss * 100))
-print("Accuracy: %f" % (accuracy * 100))

@@ -93,7 +93,7 @@ class SiameseNeuralNetwork:
         return self.model.fit(
             [self.x_train[0], self.x_train[1]],
             self.y_train.values.reshape(-1, 1),
-            epochs=15,
+            epochs=10,
             batch_size=64,
             validation_data=(
                 [self.x_validation[0], self.x_validation[1]],
