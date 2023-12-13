@@ -67,18 +67,13 @@ class SiameseNeuralNetwork:
         vector_2 = Flatten()(vector_2)
 
         x3 = Subtract()([vector_1, vector_2])
-        x3 = Multiply()([x3, x3])
-
-        x1_ = Multiply()([vector_1, vector_1])
-        x2_ = Multiply()([vector_2, vector_2])
-        x4 = Subtract()([x1_, x2_])
 
         # https://stackoverflow.com/a/51003359/10650182
-        x5 = Lambda(cosine_distance, output_shape=cos_dist_output_shape)(
+        x4 = Lambda(cosine_distance, output_shape=cos_dist_output_shape)(
             [vector_1, vector_2]
         )
 
-        conc = Concatenate(axis=-1)([x5, x4, x3])
+        conc = Concatenate(axis=-1)([x4, x3])
 
         x = Dense(100, activation="relu", name="conc_layer")(conc)
         x = Dropout(0.01)(x)
