@@ -78,6 +78,8 @@ history = neuralnet.fit()
 # Plot
 metrics.plot_history(embedded.history, "Embedding model", False)
 metrics.plot_history(history, "Siamese model")
+metrics.plot_network(embedded.model, "embedded_model.png")
+metrics.plot_network(neuralnet.model, "snn_model.png")
 
 # Evaluate model
 loss, accuracy, _ = neuralnet.evaluate()
