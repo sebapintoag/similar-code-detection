@@ -90,7 +90,7 @@ time_of_execution = time.time() - start_time
 print("Execution time: %s seconds" % time_of_execution)
 
 # Plot
-metrics.plot_history(embedded.history, "Embedding model", False)
+#metrics.plot_history(embedded.history, "Embedding model", False)
 metrics.plot_history(history, "Siamese model")
-metrics.plot_network(embedded.model, "embedded_model.png")
+#metrics.plot_network(embedded.model, "embedded_model.png")
 metrics.plot_network(neuralnet.model, "snn_model.png")
